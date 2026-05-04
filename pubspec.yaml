@@ -38,6 +38,9 @@ dependencies:
   firebase_crashlytics: ^3.5.0
   firebase_analytics: ^10.10.0
 
+  # 課金
+  in_app_purchase: ^3.2.0
+
   # UI
   cached_network_image: ^3.3.1
   flutter_localizations:

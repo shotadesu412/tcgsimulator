@@ -21,6 +21,7 @@ class HiveDb {
       Hive.openBox<CardModel>('cards'),
       Hive.openBox<DeckModel>('decks'),
       Hive.openBox<GameStateModel>('games'),
+      Hive.openBox('settings'),
     ]);
   }
 }
@@ -28,3 +29,4 @@ class HiveDb {
 final cardsBoxProvider = Provider<Box<CardModel>>((ref) => Hive.box('cards'));
 final decksBoxProvider = Provider<Box<DeckModel>>((ref) => Hive.box('decks'));
 final gamesBoxProvider = Provider<Box<GameStateModel>>((ref) => Hive.box('games'));
+final settingsBoxProvider = Provider<Box<dynamic>>((ref) => Hive.box('settings'));

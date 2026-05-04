@@ -6,6 +6,8 @@ import '../../app/theme.dart';
 import '../../core/id.dart';
 import '../../data/db/deck_dao.dart';
 import '../../domain/models/deck_model.dart';
+import '../purchase/purchase_service.dart';
+import '../purchase/purchase_sheet.dart';
 import 'deck_providers.dart';
 
 // S02: デッキ一覧画面
@@ -17,6 +19,7 @@ class DeckListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final decksAsync = ref.watch(deckListProvider);
     final deckCount = ref.watch(deckCountProvider);
+    final maxDecks = ref.watch(maxDecksProvider);
     final canCreate = ref.watch(canCreateDeckProvider);
 
     return Scaffold(
@@ -28,7 +31,7 @@ class DeckListScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Center(
               child: Text(
-                '$deckCount / $kMaxDecks',
+                '$deckCount / $maxDecks',
                 style: TextStyle(
                   color: canCreate ? AppColors.textSecondary : AppColors.warning,
                   fontWeight: FontWeight.bold,
@@ -59,10 +62,11 @@ class DeckListScreen extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: canCreate ? () => _createDeck(context, ref) : null,
-        backgroundColor: canCreate ? null : AppColors.textMuted,
-        icon: const Icon(Icons.add),
-        label: Text(canCreate ? '新規デッキ' : '上限に達しています'),
+        onPressed: canCreate
+            ? () => _createDeck(context, ref)
+            : () => PurchaseSheet.show(context),
+        icon: Icon(canCreate ? Icons.add : Icons.lock_open),
+        label: Text(canCreate ? '新規デッキ' : '枠を追加する'),
       ),
     );
   }
@@ -142,9 +146,7 @@ class _DeckCard extends ConsumerWidget {
       case _DeckAction.duplicate:
         if (!ref.read(canCreateDeckProvider)) {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('デッキは最大3つまで保存できます')),
-            );
+            await PurchaseSheet.show(context);
           }
           return;
         }

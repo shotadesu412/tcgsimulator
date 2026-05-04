@@ -4,6 +4,7 @@ import '../../data/db/card_dao.dart';
 import '../../data/db/deck_dao.dart';
 import '../../domain/models/card_model.dart';
 import '../../domain/models/deck_model.dart';
+import '../purchase/purchase_service.dart';
 
 // StreamProvider — Riverpodのキャッシュ・ライフサイクルを活用
 
@@ -16,7 +17,7 @@ final deckCountProvider = Provider<int>((ref) {
 });
 
 final canCreateDeckProvider = Provider<bool>((ref) {
-  return ref.watch(deckCountProvider) < kMaxDecks;
+  return ref.watch(deckCountProvider) < ref.watch(maxDecksProvider);
 });
 
 // 特定デッキをIDで取得（deckListProviderから派生）

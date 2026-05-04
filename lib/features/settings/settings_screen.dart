@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../app/theme.dart';
 import '../../data/db/card_dao.dart';
 import '../../data/db/deck_dao.dart';
+import '../purchase/purchase_service.dart';
+import '../purchase/purchase_sheet.dart';
 
 // S11: 設定画面 — T19
 
@@ -50,6 +52,33 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('データをインポート'),
             subtitle: const Text('バックアップから復元'),
             onTap: () => _import(context, ref),
+          ),
+          const Divider(),
+          const _SectionHeader('デッキ枠'),
+          Consumer(
+            builder: (context, ref, _) {
+              final extra = ref.watch(extraSlotsProvider);
+              final max = ref.watch(maxDecksProvider);
+              return Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.folder_copy_outlined),
+                    title: const Text('現在のデッキ枠'),
+                    trailing: Text(
+                      '$max 枠（基本 $kBaseSlots + 追加 $extra）',
+                      style: const TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.add_box_outlined),
+                    title: const Text('デッキ枠を追加購入'),
+                    subtitle: const Text('+5枠 / +20枠 / +50枠'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => PurchaseSheet.show(context),
+                  ),
+                ],
+              );
+            },
           ),
           const Divider(),
           const _SectionHeader('このアプリについて'),
