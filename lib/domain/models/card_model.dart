@@ -24,6 +24,8 @@ class CardModel extends HiveObject {
   String civilization = ''; // comma-joined e.g. "光,火"
   int cost = 0;
   String cardText = '';
+  // v3 fields
+  String backImagePath = ''; // 両面カード裏面 (空 = 通常カード)
 
   List<String> get civList =>
       civilization.isEmpty ? [] : civilization.split(',');
@@ -44,10 +46,12 @@ class CardModelAdapter extends TypeAdapter<CardModel> {
     var civilization = '';
     var cost = 0;
     var cardText = '';
+    var backImagePath = '';
     try {
       civilization = reader.readString();
       cost = reader.readInt();
       cardText = reader.readString();
+      backImagePath = reader.readString();
     } catch (_) {}
     return CardModel()
       ..id = id
@@ -57,7 +61,8 @@ class CardModelAdapter extends TypeAdapter<CardModel> {
       ..tags = tags
       ..civilization = civilization
       ..cost = cost
-      ..cardText = cardText;
+      ..cardText = cardText
+      ..backImagePath = backImagePath;
   }
 
   @override
@@ -70,5 +75,6 @@ class CardModelAdapter extends TypeAdapter<CardModel> {
     writer.writeString(obj.civilization);
     writer.writeInt(obj.cost);
     writer.writeString(obj.cardText);
+    writer.writeString(obj.backImagePath);
   }
 }

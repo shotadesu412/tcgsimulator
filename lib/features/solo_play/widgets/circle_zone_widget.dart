@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +9,7 @@ import 'zone_full_screen_sheet.dart';
 
 // サークルゾーン: 超次元 + パレット をコンパクトに格納
 // - カードドラッグ中: Overlayに超次元/パレットのドロップターゲットを展開
-// - 長押し + スライド: 方向でゾーンを選択して全画面表示
+// - 上部に「超次元」「パレット」ボタン → タップで拡大表示
 
 class CircleZoneWidget extends ConsumerStatefulWidget {
   const CircleZoneWidget({
@@ -31,31 +29,8 @@ class _CircleZoneWidgetState extends ConsumerState<CircleZoneWidget> {
   final GlobalKey _key = GlobalKey();
   OverlayEntry? _dragOverlay;
 
-  // 長押しラジアル状態
-  bool _lpExpanded = false;
-  String? _lpZone; // 現在ハイライト中のゾーン
-
-  // ゾーン定義（角度 = atan2空間、0=右、-π/2=上、π/2=下）
-  static const _zones = [
-    _ZoneDef(key: 'hyper', label: '超次元', angle: -pi / 2, color: Color(0xFF7E57C2)),
-    _ZoneDef(key: 'palette', label: 'パレット', angle: pi / 2, color: Color(0xFF26A69A)),
-  ];
-
-  String? _angleToZone(Offset offset) {
-    if (offset.distance < 20) return null;
-    final angle = offset.direction;
-    double minDiff = double.infinity;
-    String? best;
-    for (final z in _zones) {
-      var diff = (z.angle - angle).abs();
-      if (diff > pi) diff = 2 * pi - diff;
-      if (diff < minDiff) {
-        minDiff = diff;
-        best = z.key;
-      }
-    }
-    return best;
-  }
+  static const _hyperColor = Color(0xFF7E57C2);
+  static const _paletteColor = Color(0xFF26A69A);
 
   // ── ドラッグ用 Overlay ─────────────────────────────────────
 
@@ -80,10 +55,13 @@ class _CircleZoneWidgetState extends ConsumerState<CircleZoneWidget> {
             width: segW,
             height: segH,
             child: _DropSegment(
-              zoneDef: _zones[0],
+              label: '超次元',
+              color: _hyperColor,
               onDrop: (data) {
                 _hideDragOverlay();
-                ref.read(soloControllerProvider(widget.deckId).notifier).moveCard(
+                ref
+                    .read(soloControllerProvider(widget.deckId).notifier)
+                    .moveCard(
                       instanceId: data.instanceId,
                       fromZone: data.fromZone,
                       toZone: 'hyper',
@@ -98,10 +76,13 @@ class _CircleZoneWidgetState extends ConsumerState<CircleZoneWidget> {
             width: segW,
             height: segH,
             child: _DropSegment(
-              zoneDef: _zones[1],
+              label: 'パレット',
+              color: _paletteColor,
               onDrop: (data) {
                 _hideDragOverlay();
-                ref.read(soloControllerProvider(widget.deckId).notifier).moveCard(
+                ref
+                    .read(soloControllerProvider(widget.deckId).notifier)
+                    .moveCard(
                       instanceId: data.instanceId,
                       fromZone: data.fromZone,
                       toZone: 'palette',
@@ -147,91 +128,97 @@ class _CircleZoneWidgetState extends ConsumerState<CircleZoneWidget> {
     final hyperCount = widget.state.zone('hyper').length;
     final paletteCount = widget.state.zone('palette').length;
 
-    return GestureDetector(
+    return Container(
       key: _key,
-      onLongPressStart: (d) {
-        setState(() {
-          _lpExpanded = true;
-          _lpZone = null;
-        });
-      },
-      onLongPressMoveUpdate: (d) {
-        final zone = _angleToZone(d.localOffsetFromOrigin);
-        setState(() => _lpZone = zone);
-      },
-      onLongPressEnd: (d) {
-        final zone = _lpZone;
-        setState(() {
-          _lpExpanded = false;
-          _lpZone = null;
-        });
-        if (zone != null && context.mounted) {
-          showZoneFullScreen(context, ref, zoneKey: zone, deckId: widget.deckId);
-        }
-      },
-      onLongPressCancel: () {
-        setState(() {
-          _lpExpanded = false;
-          _lpZone = null;
-        });
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceMid,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.zoneBorder),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMid,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.zoneBorder),
+      ),
+      child: Column(
+        children: [
+          // 超次元ボタン
+          Expanded(
+            child: _ZoneButton(
+              label: '超次元',
+              count: hyperCount,
+              color: _hyperColor,
+              onTap: () => showZoneFullScreen(
+                context, ref,
+                zoneKey: 'hyper',
+                deckId: widget.deckId,
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: AppColors.zoneBorder),
+          // パレットボタン
+          Expanded(
+            child: _ZoneButton(
+              label: 'パレット',
+              count: paletteCount,
+              color: _paletteColor,
+              onTap: () => showZoneFullScreen(
+                context, ref,
+                zoneKey: 'palette',
+                deckId: widget.deckId,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── ゾーンボタン ──────────────────────────────────────────────
+
+class _ZoneButton extends StatelessWidget {
+  const _ZoneButton({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // ── 長押し展開時のラベル ───────────────────────
-            if (_lpExpanded) ...[
-              // 上: 超次元
-              Positioned(
-                top: 4,
-                left: 0,
-                right: 0,
-                child: _LpLabel(
-                  zoneDef: _zones[0],
-                  highlighted: _lpZone == 'hyper',
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: color.withValues(alpha: 0.5)),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: color,
                 ),
               ),
-              // 下: パレット
-              Positioned(
-                bottom: 4,
-                left: 0,
-                right: 0,
-                child: _LpLabel(
-                  zoneDef: _zones[1],
-                  highlighted: _lpZone == 'palette',
-                ),
-              ),
-            ],
-            // ── 通常表示 ───────────────────────────────────
-            if (!_lpExpanded)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.blur_circular, size: 18, color: AppColors.textMuted),
-                  const SizedBox(height: 4),
-                  _ZoneChip(
-                    label: '超次元',
-                    count: hyperCount,
-                    color: _zones[0].color,
-                  ),
-                  const SizedBox(height: 3),
-                  _ZoneChip(
-                    label: 'パレット',
-                    count: paletteCount,
-                    color: _zones[1].color,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    '長押し',
-                    style: TextStyle(fontSize: 8, color: AppColors.textMuted),
-                  ),
-                ],
-              ),
+            ),
           ],
         ),
       ),
@@ -242,9 +229,14 @@ class _CircleZoneWidgetState extends ConsumerState<CircleZoneWidget> {
 // ── ドロップセグメント（Overlay内、ドラッグ時に表示）────────────────────
 
 class _DropSegment extends StatelessWidget {
-  const _DropSegment({required this.zoneDef, required this.onDrop});
+  const _DropSegment({
+    required this.label,
+    required this.color,
+    required this.onDrop,
+  });
 
-  final _ZoneDef zoneDef;
+  final String label;
+  final Color color;
   final void Function(CardDragData) onDrop;
 
   @override
@@ -257,20 +249,20 @@ class _DropSegment extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             color: isHover
-                ? zoneDef.color.withValues(alpha: 0.8)
-                : zoneDef.color.withValues(alpha: 0.55),
+                ? color.withValues(alpha: 0.8)
+                : color.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isHover ? Colors.white : zoneDef.color,
+              color: isHover ? Colors.white : color,
               width: isHover ? 2 : 1,
             ),
             boxShadow: isHover
-                ? [BoxShadow(color: zoneDef.color.withValues(alpha: 0.5), blurRadius: 8)]
+                ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
                 : null,
           ),
           child: Center(
             child: Text(
-              zoneDef.label,
+              label,
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.white,
@@ -282,95 +274,4 @@ class _DropSegment extends StatelessWidget {
       },
     );
   }
-}
-
-// ── 長押し時のラベル ───────────────────────────────────────────────────
-
-class _LpLabel extends StatelessWidget {
-  const _LpLabel({required this.zoneDef, required this.highlighted});
-  final _ZoneDef zoneDef;
-  final bool highlighted;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 100),
-      margin: const EdgeInsets.symmetric(horizontal: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: highlighted
-            ? zoneDef.color.withValues(alpha: 0.85)
-            : zoneDef.color.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: highlighted ? Colors.white : zoneDef.color,
-          width: highlighted ? 2 : 1,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          zoneDef.label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.white,
-            fontWeight: highlighted ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── 通常時のゾーンチップ ──────────────────────────────────────────────
-
-class _ZoneChip extends StatelessWidget {
-  const _ZoneChip({required this.label, required this.count, required this.color});
-  final String label;
-  final int count;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 3),
-          Flexible(
-            child: Text(
-              '$label $count',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── ゾーン定義（内部データ）────────────────────────────────────────────
-
-class _ZoneDef {
-  const _ZoneDef({
-    required this.key,
-    required this.label,
-    required this.angle,
-    required this.color,
-  });
-  final String key;
-  final String label;
-  final double angle;
-  final Color color;
 }

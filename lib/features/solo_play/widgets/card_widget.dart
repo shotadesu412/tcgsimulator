@@ -45,6 +45,7 @@ class CardWidget extends ConsumerWidget {
       height: height,
       child: CardImageWidget(
         imagePath: cardModel?.imagePath,
+        backImagePath: cardModel?.backImagePath,
         faceUp: instance.faceUp,
         borderColor: isSelected ? AppColors.cardSelected : null,
         width: width,

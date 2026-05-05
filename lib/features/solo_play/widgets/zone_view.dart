@@ -343,6 +343,7 @@ class _HandLayout extends StatelessWidget {
         final fraction = ((cardW + 12) / constraints.maxWidth).clamp(0.05, 0.9);
         return PageView.builder(
           controller: PageController(viewportFraction: fraction),
+          padEnds: false,
           physics: const BouncingScrollPhysics(),
           itemCount: cards.length,
           itemBuilder: (context, i) {

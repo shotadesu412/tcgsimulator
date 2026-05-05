@@ -128,6 +128,19 @@ class SoloController
     };
     zones['deck'] = instances;
 
+    // 超次元ゾーン: デッキ登録時に設定した hyperEntries を配置（裏向き＝武器面）
+    for (final entry in deck.hyperEntries) {
+      for (var i = 0; i < entry.count; i++) {
+        zones['hyper']!.add(
+          CardInstance(
+            instanceId: generateId(),
+            cardId: entry.cardId,
+            faceUp: false, // 超次元では武器面（裏面）を表示
+          ),
+        );
+      }
+    }
+
     // 初期手札
     for (var i = 0; i < preset.initialHand && zones['deck']!.isNotEmpty; i++) {
       zones['hand']!.add(zones['deck']!.removeAt(0).copyWith(faceUp: true));

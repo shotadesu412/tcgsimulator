@@ -8,6 +8,8 @@ class DeckModel extends HiveObject {
   late DateTime createdAt;
   late DateTime updatedAt;
   List<DeckEntry> entries = [];
+  // v2: 超次元ゾーン設定 (最大8枚, ゲーム開始時に超次元ゾーンへ配置)
+  List<DeckEntry> hyperEntries = [];
 }
 
 class DeckEntry {
@@ -29,12 +31,28 @@ class DeckModelAdapter extends TypeAdapter<DeckModel> {
         count: reader.readInt(),
       );
     });
+    final id = reader.readString();
+    final name = reader.readString();
+    final createdAt = DateTime.fromMillisecondsSinceEpoch(reader.readInt());
+    final updatedAt = DateTime.fromMillisecondsSinceEpoch(reader.readInt());
+    // v2: 超次元エントリ (後方互換)
+    var hyperEntries = <DeckEntry>[];
+    try {
+      final hyperCount = reader.readInt();
+      hyperEntries = List.generate(hyperCount, (_) {
+        return DeckEntry(
+          cardId: reader.readString(),
+          count: reader.readInt(),
+        );
+      });
+    } catch (_) {}
     return DeckModel()
-      ..id = reader.readString()
-      ..name = reader.readString()
-      ..createdAt = DateTime.fromMillisecondsSinceEpoch(reader.readInt())
-      ..updatedAt = DateTime.fromMillisecondsSinceEpoch(reader.readInt())
-      ..entries = entries;
+      ..id = id
+      ..name = name
+      ..createdAt = createdAt
+      ..updatedAt = updatedAt
+      ..entries = entries
+      ..hyperEntries = hyperEntries;
   }
 
   @override
@@ -48,5 +66,11 @@ class DeckModelAdapter extends TypeAdapter<DeckModel> {
     writer.writeString(obj.name);
     writer.writeInt(obj.createdAt.millisecondsSinceEpoch);
     writer.writeInt(obj.updatedAt.millisecondsSinceEpoch);
+    // v2: 超次元エントリ
+    writer.writeInt(obj.hyperEntries.length);
+    for (final e in obj.hyperEntries) {
+      writer.writeString(e.cardId);
+      writer.writeInt(e.count);
+    }
   }
 }

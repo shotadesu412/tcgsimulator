@@ -28,6 +28,7 @@ class _CardEditScreenState extends ConsumerState<CardEditScreen> {
   final _textController = TextEditingController();
   CardModel? _existing;
   Uint8List? _pickedBytes;
+  Uint8List? _pickedBackBytes;
   bool _loading = false;
   Set<String> _selectedCivs = {};
   int _cost = 0;
@@ -104,10 +105,63 @@ class _CardEditScreenState extends ConsumerState<CardEditScreen> {
               child: TextButton.icon(
                 icon: const Icon(Icons.photo_library, size: 18),
                 label: Text(_pickedBytes != null || (_existing?.imagePath.isNotEmpty ?? false)
-                    ? '画像を変更'
-                    : '画像を選択（任意）'),
+                    ? '表面画像を変更'
+                    : '表面画像を選択（任意）'),
                 onPressed: _pickImage,
               ),
+            ),
+            const SizedBox(height: 16),
+
+            // 裏面画像（両面カード用）
+            const Text(
+              '裏面画像（両面カード・超次元用、任意）',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: _pickBackImage,
+                  child: Container(
+                    height: 100,
+                    width: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.zoneBorder),
+                    ),
+                    child: _buildBackImagePreview(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.photo_library, size: 16),
+                      label: Text(
+                        _pickedBackBytes != null ||
+                                (_existing?.backImagePath.isNotEmpty ?? false)
+                            ? '裏面画像を変更'
+                            : '裏面画像を選択',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      onPressed: _pickBackImage,
+                    ),
+                    if (_pickedBackBytes != null ||
+                        (_existing?.backImagePath.isNotEmpty ?? false))
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline,
+                            size: 16, color: AppColors.error),
+                        label: const Text('裏面画像を削除',
+                            style: TextStyle(
+                                fontSize: 13, color: AppColors.error)),
+                        onPressed: () =>
+                            setState(() => _pickedBackBytes = null),
+                      ),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 20),
 
@@ -245,6 +299,39 @@ class _CardEditScreenState extends ConsumerState<CardEditScreen> {
     }
   }
 
+  Future<void> _pickBackImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked != null && mounted) {
+      final bytes = await picked.readAsBytes();
+      setState(() => _pickedBackBytes = bytes);
+    }
+  }
+
+  Widget _buildBackImagePreview() {
+    if (_pickedBackBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(_pickedBackBytes!, fit: BoxFit.cover),
+      );
+    }
+    if (_existing != null && _existing!.backImagePath.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: CardImageWidget(imagePath: _existing!.backImagePath),
+      );
+    }
+    return const Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.flip, size: 24, color: AppColors.textMuted),
+        SizedBox(height: 4),
+        Text('裏面', textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
+      ],
+    );
+  }
+
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -260,28 +347,34 @@ class _CardEditScreenState extends ConsumerState<CardEditScreen> {
       final storage = ref.read(imageStorageProvider);
       final dao = ref.read(cardDaoProvider);
 
+      final cardId = isNew ? generateId() : widget.cardId;
       String imagePath = _existing?.imagePath ?? '';
+      String backImagePath = _existing?.backImagePath ?? '';
 
       if (_pickedBytes != null) {
-        final cardId = isNew ? generateId() : widget.cardId;
         final result = await storage.saveBytes(cardId, _pickedBytes!);
-        if (result.isOk) {
-          imagePath = result.value;
-        }
+        if (result.isOk) imagePath = result.value;
+      }
+      if (_pickedBackBytes != null) {
+        final result = await storage.saveBytes('${cardId}_back', _pickedBackBytes!);
+        if (result.isOk) backImagePath = result.value;
+      } else if (_pickedBackBytes == null && (_existing?.backImagePath.isEmpty ?? true)) {
+        backImagePath = '';
       }
 
       final civilization = _selectedCivs.join(',');
 
       if (isNew) {
         final card = CardModel()
-          ..id = generateId()
+          ..id = cardId
           ..name = name
           ..imagePath = imagePath
           ..createdAt = DateTime.now()
           ..tags = []
           ..civilization = civilization
           ..cost = _cost
-          ..cardText = _textController.text.trim();
+          ..cardText = _textController.text.trim()
+          ..backImagePath = backImagePath;
         await dao.upsert(card);
       } else {
         final card = _existing!
@@ -289,7 +382,8 @@ class _CardEditScreenState extends ConsumerState<CardEditScreen> {
           ..imagePath = imagePath
           ..civilization = civilization
           ..cost = _cost
-          ..cardText = _textController.text.trim();
+          ..cardText = _textController.text.trim()
+          ..backImagePath = backImagePath;
         await dao.upsert(card);
       }
 

@@ -9,6 +9,7 @@ class CardImageWidget extends StatelessWidget {
   const CardImageWidget({
     super.key,
     this.imagePath,
+    this.backImagePath,
     this.imageUrl,
     this.faceUp = true,
     this.tapped = false,
@@ -18,6 +19,8 @@ class CardImageWidget extends StatelessWidget {
   });
 
   final String? imagePath;
+  /// 両面カードの裏面画像パス。非空なら faceUp=false 時にこちらを表示する。
+  final String? backImagePath;
   final String? imageUrl;
   final bool faceUp;
   final bool tapped;
@@ -30,7 +33,12 @@ class CardImageWidget extends StatelessWidget {
     Widget image;
 
     if (!faceUp) {
-      image = _cardBack();
+      // 両面カード（backImagePath あり）→ 裏面画像を表示
+      if (backImagePath != null && backImagePath!.isNotEmpty) {
+        image = buildFileImage(backImagePath!, fit: BoxFit.cover);
+      } else {
+        image = _cardBack();
+      }
     } else if (imagePath != null && imagePath!.isNotEmpty) {
       image = buildFileImage(imagePath!, fit: BoxFit.cover);
     } else if (imageUrl != null && imageUrl!.isNotEmpty) {

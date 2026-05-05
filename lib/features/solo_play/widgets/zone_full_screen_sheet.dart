@@ -74,31 +74,28 @@ class _ZoneFullScreenOverlay extends ConsumerWidget {
     final isDragging = ref.watch(isDraggingProvider);
     final asyncState = ref.watch(soloControllerProvider(deckId));
 
-    return Stack(
-      children: [
-        // ── スクリム ──────────────────────────────────────────────
-        // ドラッグ中は取り除き、背後の DragTarget を通す
-        if (!isDragging)
-          GestureDetector(
-            onTap: onClose,
-            child: Container(color: Colors.black54),
-          ),
-
-        // ── シートコンテンツ ──────────────────────────────────────
-        // ドラッグ中: IgnorePointer + フェードアウト
-        //   → 背後の ZoneView DragTarget がヒットテストを受け取れる
-        //   → LongPressDraggable は既にジェスチャーを掌握済みなので
-        //     IgnorePointer 後もドラッグは継続する
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          top: MediaQuery.of(context).size.height * 0.08,
-          child: IgnorePointer(
-            ignoring: isDragging,
-            child: AnimatedOpacity(
-              opacity: isDragging ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 120),
+    // ドラッグ中はオーバーレイ全体を IgnorePointer + 透明にする。
+    // これで背後の ZoneView DragTarget にヒットテストが届き、ドロップを受け取れる。
+    // LongPressDraggable は GestureBinding.pointerRouter でポインタを追跡しているため、
+    // IgnorePointer になった後もドラッグは継続する。
+    return IgnorePointer(
+      ignoring: isDragging,
+      child: AnimatedOpacity(
+        opacity: isDragging ? 0.0 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Stack(
+          children: [
+            // スクリム（タップで閉じる）
+            GestureDetector(
+              onTap: onClose,
+              child: Container(color: Colors.black54),
+            ),
+            // シートコンテンツ
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              top: MediaQuery.of(context).size.height * 0.08,
               child: Material(
                 color: AppColors.surfaceDark,
                 borderRadius:
@@ -117,9 +114,9 @@ class _ZoneFullScreenOverlay extends ConsumerWidget {
                 ),
               ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -257,6 +254,7 @@ class _FullScreenCard extends ConsumerWidget {
     final displayFaceUp = forceShowFaceUp ? true : card.faceUp;
     final cardWidget = CardImageWidget(
       imagePath: model?.imagePath,
+      backImagePath: model?.backImagePath,
       faceUp: displayFaceUp,
       tapped: card.tapped,
       borderColor: card.stackId != null ? AppColors.primaryLight : null,

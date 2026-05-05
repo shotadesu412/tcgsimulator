@@ -19,19 +19,41 @@ class DeckEditScreen extends ConsumerStatefulWidget {
   ConsumerState<DeckEditScreen> createState() => _DeckEditScreenState();
 }
 
-class _DeckEditScreenState extends ConsumerState<DeckEditScreen> {
+class _DeckEditScreenState extends ConsumerState<DeckEditScreen>
+    with SingleTickerProviderStateMixin {
+  // デッキ（40枚）タブ
   Map<String, int> _counts = {};
+  // 超次元（8枚）タブ
+  Map<String, int> _hyperCounts = {};
   bool _initialized = false;
   final _searchController = TextEditingController();
   String _query = '';
+  late final TabController _tabController;
+
+  static const _kHyperMax = 8;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _initCounts(DeckModel deck) {
     if (_initialized) return;
     _counts = {for (final e in deck.entries) e.cardId: e.count};
+    _hyperCounts = {for (final e in deck.hyperEntries) e.cardId: e.count};
     _initialized = true;
   }
 
   int _total() => _counts.values.fold(0, (s, c) => s + c);
+  int _hyperTotal() => _hyperCounts.values.fold(0, (s, c) => s + c);
 
   Future<void> _setCount(DeckModel deck, String cardId, int count) async {
     setState(() {
@@ -41,38 +63,28 @@ class _DeckEditScreenState extends ConsumerState<DeckEditScreen> {
         _counts[cardId] = count;
       }
     });
-
-    final entries = _counts.entries
+    deck.entries = _counts.entries
         .map((e) => DeckEntry(cardId: e.key, count: e.value))
         .toList();
-    deck.entries = entries;
     deck.updatedAt = DateTime.now();
     await ref.read(deckDaoProvider).upsert(deck);
   }
 
-  List<CardModel> _sortCards(List<CardModel> cards) {
-    final inDeck = <CardModel>[];
-    final notInDeck = <CardModel>[];
-    for (final c in cards) {
-      if ((_counts[c.id] ?? 0) > 0) {
-        inDeck.add(c);
+  Future<void> _setHyperCount(DeckModel deck, String cardId, int count) async {
+    final newTotal = _hyperTotal() - (_hyperCounts[cardId] ?? 0) + count;
+    if (count > 0 && newTotal > _kHyperMax) return; // 8枚上限
+    setState(() {
+      if (count <= 0) {
+        _hyperCounts.remove(cardId);
       } else {
-        notInDeck.add(c);
+        _hyperCounts[cardId] = count;
       }
-    }
-    // デッキ入り: 枚数多い順 → 名前順
-    inDeck.sort((a, b) {
-      final diff = (_counts[b.id] ?? 0).compareTo(_counts[a.id] ?? 0);
-      return diff != 0 ? diff : a.name.compareTo(b.name);
     });
-    notInDeck.sort((a, b) => a.name.compareTo(b.name));
-    return [...inDeck, ...notInDeck];
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+    deck.hyperEntries = _hyperCounts.entries
+        .map((e) => DeckEntry(cardId: e.key, count: e.value))
+        .toList();
+    deck.updatedAt = DateTime.now();
+    await ref.read(deckDaoProvider).upsert(deck);
   }
 
   @override
@@ -86,48 +98,34 @@ class _DeckEditScreenState extends ConsumerState<DeckEditScreen> {
 
     _initCounts(deck);
     final total = _total();
+    final hyperTotal = _hyperTotal();
 
     return Scaffold(
       appBar: AppBar(
         title: Text(deck.name),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              child: Text(
-                '$total枚',
-                style: TextStyle(
-                  color: total > 60 ? AppColors.warning : AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: 'デッキ $total枚'),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('超次元'),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$hyperTotal/$_kHyperMax',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: hyperTotal >= _kHyperMax
+                          ? AppColors.warning
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'カード名で検索',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                      )
-                    : null,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-          ),
+          ],
         ),
       ),
       body: cardsAsync.when(
@@ -143,46 +141,127 @@ class _DeckEditScreenState extends ConsumerState<DeckEditScreen> {
               ),
             );
           }
-
-          var filtered = allCards;
-          if (_query.isNotEmpty) {
-            final lower = _query.toLowerCase();
-            filtered = allCards
-                .where((c) => c.name.toLowerCase().contains(lower))
-                .toList();
-          }
-
-          final sorted = _sortCards(filtered);
-          final inDeckCount = sorted.where((c) => (_counts[c.id] ?? 0) > 0).length;
-
-          return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 0.62,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: sorted.length,
-            itemBuilder: (context, i) {
-              final card = sorted[i];
-              final count = _counts[card.id] ?? 0;
-              final isDivider = i == inDeckCount && inDeckCount > 0 && _query.isEmpty;
-              if (isDivider) {
-                // デッキ入りとその他の間にセパレーター（グリッドでは表現できないのでカードで代用）
-                // → itemCount+1にして divider を index で制御するより、headerを別で出す
-                // ここは単純にカードを返す
-              }
-              return _DeckCardTile(
-                card: card,
-                count: count,
-                onAdd: () => _setCount(deck, card.id, count + 1),
-                onRemove: () => _setCount(deck, card.id, count - 1),
-              );
-            },
+          return Column(
+            children: [
+              // 検索バー
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'カード名で検索',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // タブ1: デッキ
+                    _CardGrid(
+                      allCards: allCards,
+                      query: _query,
+                      counts: _counts,
+                      onAdd: (cardId, count) => _setCount(deck, cardId, count + 1),
+                      onRemove: (cardId, count) => _setCount(deck, cardId, count - 1),
+                    ),
+                    // タブ2: 超次元（最大8枚）
+                    _CardGrid(
+                      allCards: allCards,
+                      query: _query,
+                      counts: _hyperCounts,
+                      maxTotal: _kHyperMax,
+                      currentTotal: hyperTotal,
+                      onAdd: (cardId, count) =>
+                          _setHyperCount(deck, cardId, count + 1),
+                      onRemove: (cardId, count) =>
+                          _setHyperCount(deck, cardId, count - 1),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),
+    );
+  }
+}
+
+// ── カードグリッド（デッキ/超次元共用）─────────────────────────────────────
+
+class _CardGrid extends StatelessWidget {
+  const _CardGrid({
+    required this.allCards,
+    required this.query,
+    required this.counts,
+    required this.onAdd,
+    required this.onRemove,
+    this.maxTotal,
+    this.currentTotal = 0,
+  });
+
+  final List<CardModel> allCards;
+  final String query;
+  final Map<String, int> counts;
+  final void Function(String cardId, int currentCount) onAdd;
+  final void Function(String cardId, int currentCount) onRemove;
+  final int? maxTotal;
+  final int currentTotal;
+
+  List<CardModel> _sortCards(List<CardModel> cards) {
+    final inDeck = cards.where((c) => (counts[c.id] ?? 0) > 0).toList();
+    final notInDeck = cards.where((c) => (counts[c.id] ?? 0) == 0).toList();
+    inDeck.sort((a, b) {
+      final diff = (counts[b.id] ?? 0).compareTo(counts[a.id] ?? 0);
+      return diff != 0 ? diff : a.name.compareTo(b.name);
+    });
+    notInDeck.sort((a, b) => a.name.compareTo(b.name));
+    return [...inDeck, ...notInDeck];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var filtered = allCards;
+    if (query.isNotEmpty) {
+      final lower = query.toLowerCase();
+      filtered = allCards.where((c) => c.name.toLowerCase().contains(lower)).toList();
+    }
+    final sorted = _sortCards(filtered);
+    final atMax = maxTotal != null && currentTotal >= maxTotal!;
+
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.62,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: sorted.length,
+      itemBuilder: (context, i) {
+        final card = sorted[i];
+        final count = counts[card.id] ?? 0;
+        return _DeckCardTile(
+          card: card,
+          count: count,
+          onAdd: (atMax && count == 0) ? null : () => onAdd(card.id, count),
+          onRemove: () => onRemove(card.id, count),
+        );
+      },
     );
   }
 }
@@ -197,8 +276,8 @@ class _DeckCardTile extends StatelessWidget {
 
   final CardModel card;
   final int count;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
+  final VoidCallback? onAdd;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +345,7 @@ class _DeckCardTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _TileButton(icon: Icons.remove, onTap: count > 0 ? onRemove : null),
+
             SizedBox(
               width: 28,
               child: Text(
