@@ -6,6 +6,7 @@ import 'app/router.dart';
 import 'app/theme.dart';
 import 'core/logger.dart';
 import 'data/db/hive_provider.dart';
+import 'features/ads/ad_service.dart';
 import 'features/purchase/purchase_service.dart';
 
 void main() async {
@@ -13,6 +14,7 @@ void main() async {
 
   await HiveDb.init();
   AppLogger.init();
+  await AdService().initialize();
 
   runApp(const ProviderScope(child: BoardKitApp()));
 }

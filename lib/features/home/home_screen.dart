@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/router.dart';
 import '../../app/theme.dart';
+import '../ads/ad_banner_widget.dart';
 import '../deck/deck_select_dialog.dart';
 
 // S01: ホーム画面
@@ -65,8 +66,7 @@ class HomeScreen extends ConsumerWidget {
                 onTap: () => context.push(AppRoutes.cardLibrary),
               ),
               const Spacer(),
-              // 広告枠予約 (AdMob用)
-              const _AdPlaceholder(),
+              const AdBannerWidget(),
             ],
           ),
         ),
@@ -130,12 +130,3 @@ class _HomeButton extends StatelessWidget {
   }
 }
 
-class _AdPlaceholder extends StatelessWidget {
-  const _AdPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    // TODO: AdMob banner insertion point
-    return const SizedBox(height: 56);
-  }
-}
